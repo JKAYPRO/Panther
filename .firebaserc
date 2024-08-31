@@ -1,0 +1,9 @@
+{
+  "projects": {
+    "default": "panther-6f0cd",
+    "dev": "panther-6f0cd"
+  },
+  "targets": {},
+  "etags": {},
+  "dataconnectEmulatorConfig": {}
+}

@@ -1,13 +1,155 @@
 body {
   margin: 0;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
-    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
-    sans-serif;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
+  font-family: 'Arial', sans-serif;
+  background-color: #f4f7fa;
+  color: #333;
 }
 
-code {
-  font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New',
-    monospace;
+.container {
+  width: 100%;
+  max-width: 100%;
+  padding: 10px;
+  background-color: #ffffff;
+  border-radius: 8px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  margin-bottom: 20px;
+}
+
+.title {
+  font-size: 20px;
+  color: #004085;
+  margin-bottom: 15px;
+  text-align: center;
+}
+
+.form {
+  display: flex;
+  flex-direction: column;
+  padding: 10px;
+}
+
+label {
+  margin-bottom: 5px;
+  font-weight: bold;
+  font-size: 14px;
+}
+
+input {
+  padding: 10px;
+  margin-bottom: 15px;
+  border: 1px solid #ced4da;
+  border-radius: 4px;
+  font-size: 14px;
+}
+
+.button {
+  padding: 10px;
+  background-color: #007bff;
+  color: #ffffff;
+  border: none;
+  border-radius: 4px;
+  font-size: 14px;
+  cursor: pointer;
+  margin-top: 10px;
+  width: 100%;
+}
+
+.button.primary {
+  background-color: #28a745;
+}
+
+.button.secondary {
+  background-color: #6c757d;
+}
+
+.button-group {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 10px;
+}
+
+.button:disabled {
+  background-color: #cccccc;
+  cursor: not-allowed;
+}
+
+.scorecard {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 10px;
+}
+
+.scorecard th,
+.scorecard td {
+  padding: 8px;
+  text-align: center;
+  border: 1px solid #dee2e6;
+  font-size: 12px;
+}
+
+.player-name {
+  font-weight: bold;
+}
+
+.score {
+  position: relative;
+}
+
+.score.birdie {
+  color: #28a745;
+  font-weight: bold;
+}
+
+.score.par {
+  color: #007bff;
+  font-weight: bold;
+}
+
+.score.bogey {
+  color: #dc3545;
+  font-weight: bold;
+}
+
+.score.double-bogey {
+  color: #dc3545;
+  font-weight: bold;
+  text-decoration: underline;
+}
+
+.score.eagle {
+  color: #17a2b8;
+  font-weight: bold;
+  text-decoration: underline;
+}
+
+.shot-hole {
+  color: #28a745;
+  font-weight: bold;
+  margin-left: 10px;
+}
+
+.shot-hole-marker {
+  color: #28a745;
+  font-weight: bold;
+  margin-left: 5px;
+}
+
+/* Additional media queries for larger screens */
+@media (min-width: 600px) {
+  .container {
+    max-width: 500px;
+    margin: 20px auto;
+  }
+
+  .title {
+    font-size: 24px;
+  }
+
+  input, .button {
+    font-size: 16px;
+  }
+
+  .scorecard th, .scorecard td {
+    font-size: 14px;
+  }
 }
