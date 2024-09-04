@@ -1,6 +1,9 @@
+// src/firebase/firebaseConfig.js
+
 import { initializeApp } from "firebase/app";
 import { getFirestore } from "firebase/firestore";
 
+// Your Firebase configuration object
 const firebaseConfig = {
   apiKey: "AIzaSyD65dC0-1uOCGbV7yrcV2lYNsscRLkcNCQ",
   authDomain: "panther-6f0cd.firebaseapp.com",
@@ -14,6 +17,8 @@ const firebaseConfig = {
 
 // Initialize Firebase
 const app = initializeApp(firebaseConfig);
+
+// Initialize Firestore and export it
 const db = getFirestore(app);
 
 export { db };

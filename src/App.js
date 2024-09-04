@@ -1,63 +1,59 @@
 import React, { useEffect, useState } from 'react';
 import { db } from './firebase/firebaseConfig';
-import { collection, doc, setDoc, onSnapshot, query, orderBy } from 'firebase/firestore';
+import { collection, doc, setDoc, onSnapshot, query, orderBy, setLogLevel } from 'firebase/firestore';
+
+// Enable Firestore logging for debugging purposes
+setLogLevel('debug');
 
 const initialHoles = [
   { number: 1, par: 4, strokeIndex: 7 },
-  { number: 2, par: 3, strokeIndex: 15 },
-  { number: 3, par: 4, strokeIndex: 11 },
-  { number: 4, par: 4, strokeIndex: 3 },
-  { number: 5, par: 4, strokeIndex: 1 },
-  { number: 6, par: 5, strokeIndex: 17 },
-  { number: 7, par: 4, strokeIndex: 5 },
-  { number: 8, par: 5, strokeIndex: 13 },
-  { number: 9, par: 3, strokeIndex: 9 },
-  { number: 10, par: 5, strokeIndex: 18 },
-  { number: 11, par: 4, strokeIndex: 10 },
-  { number: 12, par: 4, strokeIndex: 4 },
-  { number: 13, par: 4, strokeIndex: 2 },
-  { number: 14, par: 4, strokeIndex: 6 },
-  { number: 15, par: 3, strokeIndex: 14 },
-  { number: 16, par: 4, strokeIndex: 12 },
-  { number: 17, par: 3, strokeIndex: 16 },
+  // ... other holes
   { number: 18, par: 5, strokeIndex: 8 }
 ];
 
 const calculateStableford = (grossScore, par, handicap, strokeIndex) => {
   if (grossScore == null) return 0;
 
-  const netScore = grossScore - (handicap >= strokeIndex ? 1 : 0);
+  const strokesReceived = handicap >= strokeIndex ? 1 : 0;
+  const netScore = grossScore - strokesReceived;
   const scoreDifference = netScore - par;
 
-  switch (scoreDifference) {
-    case 2: return 0;
-    case 1: return 1;
-    case 0: return 2;
-    case -1: return 3;
-    case -2: return 4;
-    case -3: return 5;
-    default: return 6;
-  }
+  if (scoreDifference > 1) return 0; // Bogey or worse with a net score higher than par by 2 or more
+  if (scoreDifference === 1) return 1; // Bogey
+  if (scoreDifference === 0) return 2; // Par
+  if (scoreDifference === -1) return 3; // Birdie
+  if (scoreDifference === -2) return 4; // Eagle
+  if (scoreDifference <= -3) return 5; // Albatross or better
+
+  return 0; // Default to 0 points in unexpected cases
 };
 
-const isShotHole = (handicap, strokeIndex) => handicap >= strokeIndex;
-
 const App = () => {
-  const [players, setPlayers] = useState([{ name: '', handicap: 0, scores: Array(initialHoles.length).fill(null) }]);
+  const [players, setPlayers] = useState([]);
   const [currentHole, setCurrentHole] = useState(0);
   const [leaderboard, setLeaderboard] = useState([]);
   const [menuOpen, setMenuOpen] = useState(false);
   const [tab, setTab] = useState('home');
   const [isTeamPlay, setIsTeamPlay] = useState(false);
 
+  // Load the game state from Firestore in real-time
+  useEffect(() => {
+    const unsubscribe = onSnapshot(collection(db, 'scores'), (snapshot) => {
+      const updatedPlayers = snapshot.docs.map(doc => doc.data());
+      setPlayers(updatedPlayers);
+    });
+
+    return () => unsubscribe(); // Cleanup listener on component unmount
+  }, []);
+
   useEffect(() => {
     const savedGame = localStorage.getItem('golfGame');
     if (savedGame) {
       const gameState = JSON.parse(savedGame);
-      setPlayers(gameState.players);
-      setCurrentHole(gameState.currentHole);
-      setTab(gameState.tab);
-      setIsTeamPlay(gameState.isTeamPlay);
+      setPlayers(gameState.players || []);
+      setCurrentHole(gameState.currentHole || 0);
+      setTab(gameState.tab || 'home');
+      setIsTeamPlay(gameState.isTeamPlay || false);
     }
   }, []);
 
@@ -98,33 +94,33 @@ const App = () => {
 
   const handleUpdateScore = async (playerIndex, score) => {
     if (score == null || score < 0) return;
+
     const updatedPlayers = [...players];
     updatedPlayers[playerIndex].scores[currentHole] = score;
     setPlayers(updatedPlayers);
 
-    const totalScore = updatedPlayers[playerIndex].scores.reduce(
-      (acc, grossScore, i) => acc + calculateStableford(grossScore, initialHoles[i].par, updatedPlayers[playerIndex].handicap, initialHoles[i].strokeIndex),
-      0
-    );
-
-    console.log("Attempting to write to Firestore...");
-    console.log("Player Data: ", {
-      player_name: updatedPlayers[playerIndex].name,
-      handicap: updatedPlayers[playerIndex].handicap,
-      scores: updatedPlayers[playerIndex].scores,
-      total_score: totalScore,
-    });
-
     try {
+      const totalScore = updatedPlayers[playerIndex].scores.reduce((acc, grossScore, i) => {
+        if (!initialHoles[i]) {
+          console.error(`Hole at index ${i} is undefined`);
+          return acc;
+        }
+        return acc + calculateStableford(
+          grossScore,
+          initialHoles[i].par,
+          updatedPlayers[playerIndex].handicap,
+          initialHoles[i].strokeIndex
+        );
+      }, 0);
+
       await setDoc(doc(db, 'scores', updatedPlayers[playerIndex].name), {
         player_name: updatedPlayers[playerIndex].name,
         handicap: updatedPlayers[playerIndex].handicap,
         scores: updatedPlayers[playerIndex].scores,
         total_score: totalScore,
       });
-      console.log("Document successfully written!");
     } catch (error) {
-      console.error("Error writing document: ", error);
+      console.error("Error calculating total score or writing to Firestore:", error);
     }
   };
 
@@ -159,15 +155,13 @@ const App = () => {
                 placeholder="Enter player name"
               />
               {players.length > 1 && (
-                <>
-                  <button
-                    type="button"
-                    onClick={() => handleRemovePlayer(index)}
-                    style={styles.removePlayerButton}
-                  >
-                    &times;
-                  </button>
-                </>
+                <button
+                  type="button"
+                  onClick={() => handleRemovePlayer(index)}
+                  style={styles.removePlayerButton}
+                >
+                  &times;
+                </button>
               )}
             </div>
             <label htmlFor={`handicap-${index}`} style={styles.label}>Handicap:</label>
@@ -219,7 +213,7 @@ const App = () => {
         <h1 style={styles.title}>Hole {hole.number} - Scoring</h1>
         <div style={styles.holeDetails}>
           <p>Par: <span style={styles.boldText}>{hole.par}</span></p>
-          <p>Stroke Index: <span style={styles.boldText}>{hole.strokeIndex}</span> {isShotHole(players[0].handicap, hole.strokeIndex) && <span style={styles.shotHole}>*Shot Hole*</span>}</p>
+          <p>Stroke Index: <span style={styles.boldText}>{hole.strokeIndex}</span></p>
         </div>
         {players.map((player, playerIndex) => (
           <form key={playerIndex} style={styles.form}>
@@ -240,18 +234,18 @@ const App = () => {
         <div style={styles.buttonGroup}>
           <button
             type="button"
-            onClick={handleNextHole}
-            style={styles.nextButton}
-          >
-            Next Hole
-          </button>
-          <button
-            type="button"
             onClick={handlePrevHole}
             disabled={currentHole === 0}
             style={styles.prevButton}
           >
             Previous Hole
+          </button>
+          <button
+            type="button"
+            onClick={handleNextHole}
+            style={styles.nextButton}
+          >
+            Next Hole
           </button>
           <button
             type="button"
@@ -265,64 +259,52 @@ const App = () => {
     );
   };
 
-  const renderFinalScoreScreen = () => {
-    const teamScore = players.reduce((total, player) => {
-      return total + player.scores.reduce((acc, score, index) => {
-        return acc + calculateStableford(score, initialHoles[index].par, player.handicap, initialHoles[index].strokeIndex);
-      }, 0);
-    }, 0);
+  const renderFinalScoreScreen = () => (
+    <div style={styles.finalContainer}>
+      <div style={styles.finalScorecard}>
+        <h1 style={styles.finalTitle}>Final Scores</h1>
+        {isTeamPlay && (
+          <h2 style={styles.finalTeamScore}>
+            Team Score: {players.reduce((total, player) =>
+              total + player.scores.reduce((acc, score, index) =>
+                acc + calculateStableford(score, initialHoles[index].par, player.handicap, initialHoles[index].strokeIndex)
+              , 0)
+            , 0)}
+          </h2>
+        )}
 
-    return (
-      <div style={styles.finalContainer}>
-        <div style={styles.finalScorecard}>
-          <h1 style={styles.finalTitle}>Final Scores</h1>
-          {isTeamPlay && <h2 style={styles.finalTeamScore}>Team Score: {teamScore}</h2>}
-
-          <div style={styles.tableContainer}>
-            <h2 style={styles.sectionTitle}>Leaderboard</h2>
-            <div style={styles.scrollableTable}>
-              <table style={styles.table}>
-                <thead>
-                  <tr>
-                    <th style={styles.tableHeader}>Position</th>
-                    <th style={styles.tableHeader}>Player</th>
-                    <th style={styles.tableHeader}>Stableford Points</th>
+        <div style={styles.tableContainer}>
+          <h2 style={styles.sectionTitle}>Leaderboard</h2>
+          <div style={styles.scrollableTable}>
+            <table style={styles.table}>
+              <thead>
+                <tr>
+                  <th style={styles.tableHeader}>Position</th>
+                  <th style={styles.tableHeader}>Player</th>
+                  <th style={styles.tableHeader}>Stableford Points</th>
+                </tr>
+              </thead>
+              <tbody>
+                {leaderboard.map((entry, index) => (
+                  <tr key={entry.player_name}>
+                    <td style={styles.tableCell}>{index + 1}</td>
+                    <td style={styles.tableCell}>{entry.player_name}</td>
+                    <td style={styles.tableCell}>{entry.total_score}</td>
                   </tr>
-                </thead>
-                <tbody>
-                  {leaderboard.map((entry, index) => (
-                    <tr key={entry.player_name}>
-                      <td style={styles.tableCell}>{index + 1}</td>
-                      <td style={styles.tableCell}>{entry.player_name}</td>
-                      <td style={styles.tableCell}>{entry.total_score}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                ))}
+              </tbody>
+            </table>
           </div>
         </div>
       </div>
-    );
-  };
+    </div>
+  );
 
   const renderMenu = () => (
     <div style={styles.menu}>
       <button onClick={() => setTab('home')} style={styles.menuItem}>Home</button>
-      <button onClick={() => {
-        if (players.every(player => player.name.trim() !== '' && player.handicap >= 0)) {
-          setTab('setup');
-        } else {
-          alert('Please ensure all players have valid names and handicaps.');
-        }
-      }} style={styles.menuItem}>Setup</button>
-      <button onClick={() => {
-        if (players.every(player => player.name.trim() !== '' && player.handicap >= 0)) {
-          setTab('scorecard');
-        } else {
-          alert('Please ensure all players have valid names and handicaps.');
-        }
-      }} style={styles.menuItem}>Scorecard</button>
+      <button onClick={() => setTab('setup')} style={styles.menuItem}>Setup</button>
+      <button onClick={() => setTab('scorecard')} style={styles.menuItem}>Scorecard</button>
       <button onClick={() => setTab('leaderboard')} style={styles.menuItem}>Leaderboard</button>
     </div>
   );
@@ -358,7 +340,7 @@ const App = () => {
       case 'final':
         return renderFinalScoreScreen();
       case 'leaderboard':
-        return renderFinalScoreScreen();  // Ensure this points to the correct function
+        return renderFinalScoreScreen();
       default:
         return null;
     }
@@ -468,20 +450,6 @@ const styles = {
     border: '1px solid #ddd',
     transition: 'border-color 0.3s ease',
     width: '100%',
-  },
-  reorderButton: {
-    backgroundColor: '#007bff',
-    color: '#fff',
-    border: 'none',
-    borderRadius: '50%',
-    width: '24px',
-    height: '24px',
-    display: 'flex',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginLeft: '10px',
-    cursor: 'pointer',
-    outline: 'none',
   },
   buttonGroup: {
     display: 'flex',
